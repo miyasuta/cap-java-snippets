@@ -31,24 +31,22 @@ public class BooksHandler implements EventHandler {
     }
 
     @On(event = "submitOrder", entity = Books_.CDS_NAME)
-    public void submitOrder(SubmitOrderContext context) {
+    public Orders submitOrder(SubmitOrderContext context) {
         // 生成された型付きゲッターでパラメータを取得
         Integer quantity = context.getQuantity();
 
         // キーを取得して対象エンティティを特定
         Object bookId = analyzer.analyze(context.getCqn()).targetValues().get(Books.ID);
 
-        // 処理
-        Orders order = processOrder(bookId, quantity);
-        context.setResult(order);
-        context.setCompleted();
+        // return で返す（ランタイムが setResult + setCompleted を自動処理）
+        return processOrder(bookId, quantity);
     }
 }
 ```
 
 **補足**  
 - `event` にはアクション名（CDS で定義した名前）を指定する。
-- `context.setCompleted()` を呼ばないとデフォルト処理が続行される。
+- 返り値ありの `@On` は `return` で返すだけでよい。`setResult` / `setCompleted` は不要。
 - 型付き `EventContext` は cds-maven-plugin により CDS モデルから自動生成される。
 
 ---
@@ -75,17 +73,15 @@ public interface ResetCatalogContext extends EventContext {
 public class CatalogServiceHandler implements EventHandler {
 
     @On(event = "resetCatalog")
-    public void resetCatalog(ResetCatalogContext context) {
-        boolean success = performReset();
-        context.setResult(success);
-        context.setCompleted();
+    public Boolean resetCatalog(ResetCatalogContext context) {
+        return performReset();
     }
 }
 ```
 
 **補足**  
 - アンバウンドアクションは `entity` を指定しない。
-- `returns` に対応する Java 型を `setResult()` で返す（プリミティブ型はラッパー型を使う）。
+- `returns` に対応する Java ラッパー型（`Boolean`, `Integer` など）を `return` する。
 
 ---
 
@@ -128,5 +124,6 @@ public class BooksHandler implements EventHandler {
 **補足**  
 - 型付き `EventContext` を使うと `context.get(String)` によるキャストが不要になる。
 - 複合パラメータ（構造体型）も生成されたクラスで型安全に受け取れる。
+- `returns` を持たないアクションは `void` + `context.setCompleted()` を使う。
 
 > 参照: [Actions and Functions – CAP Java](https://cap.cloud.sap/docs/java/cqn-services/application-services)

@@ -3,7 +3,7 @@
 ## UserInfo でのユーザ・ロール取得
 
 **概要**  
-リクエストユーザの ID やロールを `UserInfo` から取得する。
+リクエストユーザの ID やロールを `UserInfo` から取得する。`UserInfo` はリクエストスコープ Bean のため、シングルトンである EventHandler ではコンストラクタ注入は使えない。EventContext から取得するのが最もシンプルで確実。
 
 **コード**  
 
@@ -12,21 +12,17 @@
 @ServiceName(CatalogService_.CDS_NAME)
 public class OrdersHandler implements EventHandler {
 
-    private final UserInfo userInfo;
-
-    public OrdersHandler(UserInfo userInfo) {
-        this.userInfo = userInfo;
-    }
-
     @Before(event = CdsService.EVENT_CREATE, entity = Orders_.CDS_NAME)
     public void setCreatedBy(CdsCreateEventContext context, List<Orders> orders) {
+        // EventContext から直接取得する（推奨）
+        UserInfo userInfo = context.getUserInfo();
         String userId = userInfo.getName();
         boolean isAdmin = userInfo.hasRole("Admin");
 
         orders.forEach(order -> {
             order.setCreatedBy(userId);
             if (!isAdmin && order.getNetAmount().compareTo(APPROVAL_THRESHOLD) > 0) {
-                context.getMessages().error("APPROVAL_REQUIRED");
+                context.getMessages().error(MessageKeys.APPROVAL_REQUIRED);
             }
         });
     }
@@ -34,8 +30,10 @@ public class OrdersHandler implements EventHandler {
 ```
 
 **補足**  
+- `context.getUserInfo()` はすべての EventContext サブタイプで使える。
 - `userInfo.getName()` は認証プロバイダによって返す値が異なる（メールアドレス、ユーザ ID など）。
 - `hasRole()` の引数は CDS の `@requires` や `@restrict` で定義したロール名。
+- EventContext を持たないメソッドから参照したい場合は `@Autowired UserInfo userInfo`（フィールド注入）が使える。Spring がリクエストスコープのプロキシを自動生成する。
 
 ---
 
@@ -51,13 +49,10 @@ BTP の XSUAA トークンに含まれるカスタムクレーム（例: `xs.use
 @ServiceName(CatalogService_.CDS_NAME)
 public class TenantHandler implements EventHandler {
 
-    private final UserInfo userInfo;
+    @Before(event = CqnService.EVENT_READ, entity = Orders_.CDS_NAME)
+    public void handler(CdsReadEventContext context) {
+        UserInfo userInfo = context.getUserInfo();
 
-    public TenantHandler(UserInfo userInfo) {
-        this.userInfo = userInfo;
-    }
-
-    public void handler(EventContext context) {
         // xs.user.attributes のカスタム属性を取得
         List<String> costCenters = userInfo.getAttributeValues("costCenter");
 
