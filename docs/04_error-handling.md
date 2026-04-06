@@ -5,6 +5,7 @@
 - [req.error() と ServiceException の使い分け](#reqerror-と-serviceexception-の使い分け)
 - [messages.properties によるメッセージ管理](#messagesproperties-によるメッセージ管理)
 - [フィールドレベルエラー](#フィールドレベルエラー)
+- [Composition 子エンティティへのエラーターゲット指定](#composition-子エンティティへのエラーターゲット指定)
 
 ---
 
@@ -103,3 +104,45 @@ context.getMessages().error(MessageKeys.AUTHOR_NAME_MISSING)
 **補足**  
 - `.target("in", ...)` の第1引数は CDS アノテーションの `target` に相当する。通常は `"in"` を使う。
 - Fiori Elements の List Report / Object Page はフィールドレベルエラーをインライン表示できる。
+
+---
+
+## Composition 子エンティティへのエラーターゲット指定
+
+**概要**  
+ルートエンティティ（例: `Orders`）のハンドラ内で、composition 先の子エンティティ（例: `Items`）のフィールドをエラーターゲットに指定する。これにより Fiori Elements がエラーを子エンティティの当該フィールドにインライン表示する。
+
+**コード**
+
+```java
+@Component
+@ServiceName(OrdersService_.CDS_NAME)
+public class OrdersHandler implements EventHandler {
+
+    @Autowired
+    private Messages messages;
+
+    @Before(event = CqnService.EVENT_UPDATE, entity = Orders_.CDS_NAME)
+    public void validateItems(Orders order) {
+        order.getItems().forEach(item -> {
+            if (item.getQuantity() == null || item.getQuantity() <= 0) {
+                messages.error("Quantity must be positive")
+                    .target(Orders_.class, o -> o.items(
+                        i -> i.ID().eq(item.getId())
+                              .and(i.parent_ID().eq(item.getParentId()))
+                              .and(i.IsActiveEntity().eq(false)) // ドラフトの場合
+                    ).quantity());                               // ハイライトするフィールド
+            }
+        });
+        messages.throwIfError();
+    }
+}
+```
+
+**補足**
+- `.target(Orders_.class, o -> o.items(filter).quantity())` の形で composition を辿る。`items()` の引数にフィルタ述語を渡すことで特定の子エンティティ行を指定する。
+- フィルタに `ID` と `parent_ID` の両方を含めることで、子エンティティ行を一意に特定できる。
+- ドラフト対応エンティティの場合は `.and(i.IsActiveEntity().eq(false))` を追加する。ドラフトでない場合はこの条件を省略する。
+- `messages.throwIfError()` をハンドラ末尾で呼ぶことで、エラーがあれば処理を中断してまとめて返す。
+
+> 参照: [Messages – CAP Java](https://cap.cloud.sap/docs/java/indicating-errors#messages)
