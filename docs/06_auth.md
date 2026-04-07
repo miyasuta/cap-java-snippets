@@ -13,6 +13,17 @@
 **概要**  
 ローカル開発時は XSUAA を使わずにモック認証を有効化できる。`application.yaml` にテスト用ユーザ・ロール・属性を定義しておくことで、`UserInfo` の動作を本番と同じコードで検証できる。
 
+**前提条件（`pom.xml`）**
+
+モック認証を使用するには、サービスモジュールの `pom.xml` に `cds-starter-cloudfoundry` の依存関係が必要。
+
+```xml
+<dependency>
+    <groupId>com.sap.cds</groupId>
+    <artifactId>cds-starter-cloudfoundry</artifactId>
+</dependency>
+```
+
 **コード（`src/main/resources/application.yaml`）**
 
 ```yaml
