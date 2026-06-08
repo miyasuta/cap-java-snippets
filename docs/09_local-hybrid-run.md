@@ -101,6 +101,28 @@ cds bind --exec -- node -e "require('fs').writeFileSync('.hybrid.env', 'VCAP_SER
 
 > 注意: `.hybrid.env` には資格情報が平文で保存される。`.gitignore` 必須。バインディング先のローテーション後は書き出し直すこと。
 
+**`.hybrid.env` の形式（手書きも可）**  
+`.hybrid.env` は dotenv 形式（`KEY=VALUE`）のプレーンテキスト。書き出されるのは `VCAP_SERVICES` 1行だけで、右辺には Cloud Foundry と同じ `VCAP_SERVICES` JSON が**1行・改行なし・クォートなし**で入る。
+
+```
+VCAP_SERVICES={"hana":[{"name":"my-hana","label":"hana","tags":["hana","database"],"credentials":{"host":"...","port":"443","user":"DBADMIN","password":"...","url":"jdbc:sap://...","schema":"..."}}],"xsuaa":[{"name":"my-xsuaa","label":"xsuaa","credentials":{"clientid":"sb-...","clientsecret":"...","url":"https://....authentication...ondemand.com","xsappname":"..."}}]}
+```
+
+`cds bind --exec` を使わず、サービスキーの中身を手書きで貼ることも可能。ただし **service key の JSON をそのまま貼ってはいけない**。service key の中身は `VCAP_SERVICES` でいう `credentials` ブロックに相当するため、サービス種別をキーにした配列でラップする必要がある。
+
+```jsonc
+// service key の中身（= credentials 相当。これをそのままトップレベルに貼るのは NG）
+{ "host": "...", "port": "443", "user": "DBADMIN", "password": "...", "url": "jdbc:sap://...", "schema": "..." }
+```
+
+手書きする場合の注意:
+- service key は必ず `credentials` の中に入れる（トップレベルに直接置かない）。
+- `label`（`hana` / `xsuaa` 等）・`tags`・`name` を正しく付ける。CAP はこれらでバインディングを解決するため、合っていないと「該当サービスなし」となり H2・モック認証へフォールバックする。
+- 複数サービスは同じ `VCAP_SERVICES` オブジェクトに種別ごとのキーで並べる（`{"hana":[...],"xsuaa":[...]}`）。
+- 全体を 1 行で書く（改行を入れると壊れる）。
+
+> 封筒構造は `cds bind --exec ... writeFileSync` 方式が自動で正しく組み立てる。手書きはミスりやすいので、書き出し方式を優先する。
+
 **ターミナルから実行するなら設定不要（`cds bind --exec`）**  
 ターミナルから起動できる場合は `.env` ファイルを用意せず、`cds bind --exec` でラップするだけでよい。資格情報は ad-hoc に取得され、ディスクには残らない。
 
