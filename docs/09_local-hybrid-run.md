@@ -61,30 +61,25 @@ cds bind --exec -- mvn clean install -Dspring.profiles.active=cloud
 
 ## VS Code Test Runner から実行する場合は `.env` ファイルが必要
 
-**概要（結論）**  
-CAP Java の hybrid 実行に `.env` ファイルは **必須ではない**。`.hybrid.env` のようなファイルは「CAP Java hybrid の要件」ではなく「VSCode テストランナー連携の都合」で必要になるものにすぎない。
+**概要**  
+VS Code の Java Test Runner UI（テスト実行ボタン）から hybrid テストを起動する場合は、`.hybrid.env` のような `.env` ファイルが **必要**。一方、ターミナルから [前述](#hybrid-プロファイル-vs-cloud-プロファイルの使い分け)の `cds bind --exec` でラップして実行するなら `.env` ファイルは **不要**（資格情報はその場で `VCAP_SERVICES` に注入され、ディスクに残らない）。
 
-- **ターミナルから実行する場合**（`mvn test` / `mvn spring-boot:run`）は [前述](#hybrid-プロファイル-vs-cloud-プロファイルの使い分け)の `cds bind --exec` でラップすれば、資格情報をその場で取得して `VCAP_SERVICES` として注入するため **ファイル不要**（ディスクに残らない）。
-- **VSCode の Java Test Runner UI から実行する場合のみ**、環境変数を動的注入できないという制約があるため、`.hybrid.env` に `VCAP_SERVICES` を書き出して読ませる回避策が必要になる。
+**`.env` ファイルが必要になるケースとその理由**  
+CAP Java ランタイムはサービスバインディングを `VCAP_SERVICES` 環境変数経由で受け取る。ターミナル実行では `cds bind --exec` がこの環境変数を実行時に注入できるが、**VS Code の Java Test Runner には環境変数を動的注入する仕組みがない**。そのため Test Runner UI からテストを起動するには、`VCAP_SERVICES` をいったん `.hybrid.env` へ書き出し、`envFile` 設定で読み込ませる回避策が必要になる。
 
-**標準的なやり方: `cds bind --exec`（ファイル不要）**  
-サービスバインディングをクラウドから解決し、`VCAP_SERVICES` 環境変数としてアプリケーションへ渡す。資格情報は ad-hoc に取得され、ディスクには残らない。
+つまり `.hybrid.env` は「CAP Java hybrid の要件」ではなく「VS Code Test Runner 連携の都合」で必要になるファイルである。
 
-```bash
-# アプリの hybrid 起動
-cds bind --exec -- mvn spring-boot:run
+| 実行方法 | `.env` ファイル |
+|---|---|
+| ターミナル `cds bind --exec -- mvn test` | 不要（`VCAP_SERVICES` を ad-hoc 注入） |
+| ターミナル `cds bind --exec -- mvn spring-boot:run` | 不要（同上、アプリ起動） |
+| **VS Code Java Test Runner UI** | **必要**（動的注入不可のため `.hybrid.env` + `envFile`） |
 
-# テストの hybrid 実行（ターミナルからならこれで十分）
-cds bind --exec -- mvn test -Dtest=customer.cap_agent.AgentTest#testSdkPrompt
-```
-
-CAP Java のテストガイドでも、hybrid テストの手順として cds-bind の "Run CAP Java Apps with Service Bindings" を参照するよう案内されており、`cds bind --exec` が正規ルート。
-
-**VSCode Test Runner UI の場合の回避策: `.hybrid.env`**  
-VSCode の Java Test Runner（テスト実行ボタン）には環境変数を動的注入できない。UI からテストを起動したい場合に限り、`VCAP_SERVICES` を一旦ファイルへ書き出して `envFile` で読ませる。
+**必要な設定内容**  
+Test Runner UI から起動するために必要な設定は次の3点。
 
 ```bash
-# 1. VCAP_SERVICES をファイルに書き出す
+# 1. VCAP_SERVICES を .hybrid.env に書き出す
 cds bind --exec -- node -e "require('fs').writeFileSync('.hybrid.env', 'VCAP_SERVICES=' + process.env.VCAP_SERVICES, 'utf8')"
 ```
 
@@ -105,6 +100,19 @@ cds bind --exec -- node -e "require('fs').writeFileSync('.hybrid.env', 'VCAP_SER
 ```
 
 > 注意: `.hybrid.env` には資格情報が平文で保存される。`.gitignore` 必須。バインディング先のローテーション後は書き出し直すこと。
+
+**ターミナルから実行するなら設定不要（`cds bind --exec`）**  
+ターミナルから起動できる場合は `.env` ファイルを用意せず、`cds bind --exec` でラップするだけでよい。資格情報は ad-hoc に取得され、ディスクには残らない。
+
+```bash
+# アプリの hybrid 起動
+cds bind --exec -- mvn spring-boot:run
+
+# テストの hybrid 実行（ターミナルからならこれで十分）
+cds bind --exec -- mvn test -Dtest=customer.cap_agent.AgentTest#testSdkPrompt
+```
+
+CAP Java のテストガイドでも、hybrid テストの手順として cds-bind の "Run CAP Java Apps with Service Bindings" を参照するよう案内されており、`cds bind --exec` が正規ルート。
 
 **使い分け早見表**
 
