@@ -3,7 +3,7 @@
 ## 目次
 
 - [hybrid プロファイル vs cloud プロファイルの使い分け](#hybrid-プロファイル-vs-cloud-プロファイルの使い分け)
-- [hybrid 実行に `.env` ファイルは必要か](#hybrid-実行に-env-ファイルは必要か)
+- [VS Code Test Runner から実行する場合は `.env` ファイルが必要](#vs-code-test-runner-から実行する場合は-env-ファイルが必要)
 
 ---
 
@@ -59,7 +59,7 @@ cds bind --exec -- mvn clean install -Dspring.profiles.active=cloud
 
 ---
 
-## hybrid 実行に `.env` ファイルは必要か
+## VS Code Test Runner から実行する場合は `.env` ファイルが必要
 
 **概要（結論）**  
 CAP Java の hybrid 実行に `.env` ファイルは **必須ではない**。`.hybrid.env` のようなファイルは「CAP Java hybrid の要件」ではなく「VSCode テストランナー連携の都合」で必要になるものにすぎない。
