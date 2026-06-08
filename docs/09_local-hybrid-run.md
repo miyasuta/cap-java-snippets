@@ -3,6 +3,7 @@
 ## 目次
 
 - [hybrid プロファイル vs cloud プロファイルの使い分け](#hybrid-プロファイル-vs-cloud-プロファイルの使い分け)
+- [hybrid 実行に `.env` ファイルは必要か](#hybrid-実行に-env-ファイルは必要か)
 
 ---
 
@@ -55,3 +56,65 @@ cds bind --exec -- mvn clean install -Dspring.profiles.active=cloud
 - バインド情報は `~/.cdsrc-private.json` に保存される（プロジェクトルートではない）。コミットしない。
 
 > 参照: [Hybrid Testing – CAP](https://cap.cloud.sap/docs/advanced/hybrid-testing) / [cds bind – CAP CLI](https://cap.cloud.sap/docs/tools/cds-bind)
+
+---
+
+## hybrid 実行に `.env` ファイルは必要か
+
+**概要（結論）**  
+CAP Java の hybrid 実行に `.env` ファイルは **必須ではない**。`.hybrid.env` のようなファイルは「CAP Java hybrid の要件」ではなく「VSCode テストランナー連携の都合」で必要になるものにすぎない。
+
+- **ターミナルから実行する場合**（`mvn test` / `mvn spring-boot:run`）は [前述](#hybrid-プロファイル-vs-cloud-プロファイルの使い分け)の `cds bind --exec` でラップすれば、資格情報をその場で取得して `VCAP_SERVICES` として注入するため **ファイル不要**（ディスクに残らない）。
+- **VSCode の Java Test Runner UI から実行する場合のみ**、環境変数を動的注入できないという制約があるため、`.hybrid.env` に `VCAP_SERVICES` を書き出して読ませる回避策が必要になる。
+
+**標準的なやり方: `cds bind --exec`（ファイル不要）**  
+サービスバインディングをクラウドから解決し、`VCAP_SERVICES` 環境変数としてアプリケーションへ渡す。資格情報は ad-hoc に取得され、ディスクには残らない。
+
+```bash
+# アプリの hybrid 起動
+cds bind --exec -- mvn spring-boot:run
+
+# テストの hybrid 実行（ターミナルからならこれで十分）
+cds bind --exec -- mvn test -Dtest=customer.cap_agent.AgentTest#testSdkPrompt
+```
+
+CAP Java のテストガイドでも、hybrid テストの手順として cds-bind の "Run CAP Java Apps with Service Bindings" を参照するよう案内されており、`cds bind --exec` が正規ルート。
+
+**VSCode Test Runner UI の場合の回避策: `.hybrid.env`**  
+VSCode の Java Test Runner（テスト実行ボタン）には環境変数を動的注入できない。UI からテストを起動したい場合に限り、`VCAP_SERVICES` を一旦ファイルへ書き出して `envFile` で読ませる。
+
+```bash
+# 1. VCAP_SERVICES をファイルに書き出す
+cds bind --exec -- node -e "require('fs').writeFileSync('.hybrid.env', 'VCAP_SERVICES=' + process.env.VCAP_SERVICES, 'utf8')"
+```
+
+```gitignore
+# 2. .gitignore に追加（資格情報をコミットしない）
+*.env
+```
+
+```jsonc
+// 3. .vscode/settings.json — テストランナーに .hybrid.env を読ませる
+"java.test.config": [
+  {
+    "name": "cap-bound-tests",
+    "workingDirectory": "${workspaceFolder}",
+    "envFile": "${workspaceFolder}/.hybrid.env"
+  }
+]
+```
+
+> 注意: `.hybrid.env` には資格情報が平文で保存される。`.gitignore` 必須。バインディング先のローテーション後は書き出し直すこと。
+
+**使い分け早見表**
+
+| 実行方法 | `.env` ファイル | 備考 |
+|---|---|---|
+| ターミナル `cds bind --exec -- mvn test` | 不要 | 資格情報は ad-hoc 注入、ディスクに残らない |
+| ターミナル `cds bind --exec -- mvn spring-boot:run` | 不要 | 同上（アプリ起動） |
+| VSCode Java Test Runner UI | 必要 | 動的注入不可のため `.hybrid.env` + `envFile` |
+
+**補足: `default-env.json`**  
+もう一つの古典的なファイルベースの選択肢として `default-env.json`（`VCAP_SERVICES` を手書き／書き出して配置）もある。ただしこれも `cds bind --exec` を使うなら不要。ファイルに資格情報を残したくないなら `cds bind --exec` を優先する。
+
+> 参照: [Testing CAP Java Applications（Hybrid Testing）](https://cap.cloud.sap/docs/java/developing-applications/testing) / [cds bind（Run CAP Java Apps with Service Bindings）](https://cap.cloud.sap/docs/tools/cds-bind)
